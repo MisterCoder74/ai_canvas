@@ -2483,6 +2483,7 @@ function createFenceElement(fenceData) {
     editBtn.title = 'Edit fence';
     editBtn.onclick = (e) => {
         e.stopPropagation();
+        e.preventDefault();
         editFence(fenceData.id);
     };
     fence.appendChild(editBtn);
@@ -2517,6 +2518,8 @@ function removeFence(id) {
 }
 
 function editFence(id) {
+    cancelAllModes();
+
     const fence = canvasState.fences.find(f => f.id === id);
     if (!fence) return;
     
