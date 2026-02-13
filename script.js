@@ -63,6 +63,8 @@ let fencePreviewElement = null;
 let selectedFenceColor = '#4a7c2c';
 let tempFenceCoords = null;
 
+// Fence editing state
+let editingFenceId = null;
 // Zoom state
 let zoomLevel = 1;
 const MIN_ZOOM = 0.5;
@@ -2279,6 +2281,10 @@ function removeStickyNote(id) {
 function startDrawingFence() {
     cancelAllModes();
     
+    // Reset any previous editing state
+    editingFenceId = null;
+    document.querySelector('#fenceModal .modal-header h3').textContent = '🖼️ Create Fence';
+    
     isDrawingFence = true;
     fenceStartPoint = null;
     tempFenceCoords = null;
@@ -2387,39 +2393,68 @@ function selectFenceColor(color) {
 }
 
 function confirmFence() {
-    if (!tempFenceCoords) return;
-    
     const label = document.getElementById('fenceLabel').value.trim();
     
-    const fenceData = {
-        id: Date.now(),
-        x: tempFenceCoords.x,
-        y: tempFenceCoords.y,
-        width: tempFenceCoords.width,
-        height: tempFenceCoords.height,
-        color: selectedFenceColor,
-        label: label
-    };
+    if (editingFenceId !== null) {
+        // EDIT MODE: Update existing fence
+        const fence = canvasState.fences.find(f => f.id === editingFenceId);
+        if (fence) {
+            const beforeData = { label: fence.label, color: fence.color };
+            fence.label = label;
+            fence.color = selectedFenceColor;
+            if (!isUndoingRedoing) {
+                pushUndoStack({
+                    type: 'update',
+                    elementType: 'fence',
+                    id: fence.id,
+                    before: beforeData,
+                    after: { label: label, color: selectedFenceColor }
+                });
+            }
+            saveCanvasState();
+            renderCanvas();
+            showToast('success', 'Fence Updated', 'Fence modified successfully.');
+        }
+        editingFenceId = null;
+    } else {
+        // CREATE MODE: Create new fence
+        if (!tempFenceCoords) return;
+        
+        const fenceData = {
+            id: Date.now(),
+            x: tempFenceCoords.x,
+            y: tempFenceCoords.y,
+            width: tempFenceCoords.width,
+            height: tempFenceCoords.height,
+            color: selectedFenceColor,
+            label: label
+        };
+        
+        if (!canvasState.fences) canvasState.fences = [];
+        canvasState.fences.push(fenceData);
+        saveCanvasState();
+        createFenceElement(fenceData);
+        pushUndoStack({
+            type: 'add',
+            elementType: 'fence',
+            data: cloneData(fenceData)
+        });
+        
+        showToast('success', 'Fence Created', 'Visual group added!');
+        tempFenceCoords = null;
+    }
     
-    if (!canvasState.fences) canvasState.fences = [];
-    canvasState.fences.push(fenceData);
-    saveCanvasState();
-    createFenceElement(fenceData);
-    pushUndoStack({
-        type: 'add',
-        elementType: 'fence',
-        data: cloneData(fenceData)
-    });
-    
+    // Reset modal title
+    document.querySelector('#fenceModal .modal-header h3').textContent = '🖼️ Create Fence';
     closeModal('fenceModal');
-    tempFenceCoords = null;
-    
-    showToast('success', 'Fence Created', 'Visual group added!');
 }
 
 function cancelFence() {
-    closeModal('fenceModal');
+    editingFenceId = null;
     tempFenceCoords = null;
+    // Reset modal title
+    document.querySelector('#fenceModal .modal-header h3').textContent = '🖼️ Create Fence';
+    closeModal('fenceModal');
 }
 
 function createFenceElement(fenceData) {
@@ -2442,6 +2477,16 @@ function createFenceElement(fenceData) {
         fence.appendChild(label);
     }
     
+    const editBtn = document.createElement('button');
+    editBtn.className = 'fence-edit';
+    editBtn.innerHTML = '✏️';
+    editBtn.title = 'Edit fence';
+    editBtn.onclick = (e) => {
+        e.stopPropagation();
+        editFence(fenceData.id);
+    };
+    fence.appendChild(editBtn);
+
     const closeBtn = document.createElement('button');
     closeBtn.className = 'fence-close';
     closeBtn.textContent = '×';
@@ -2469,6 +2514,32 @@ function removeFence(id) {
     saveCanvasState();
     renderCanvas();
     showToast('success', 'Fence Removed', 'Visual group deleted.');
+}
+
+function editFence(id) {
+    const fence = canvasState.fences.find(f => f.id === id);
+    if (!fence) return;
+    
+    // Set editing mode
+    editingFenceId = id;
+    
+    // Populate modal with current values
+    document.getElementById('fenceLabel').value = fence.label || '';
+    
+    // Select current color
+    selectedFenceColor = fence.color || '#4a7c2c';
+    document.querySelectorAll('#fenceModal .color-option').forEach(opt => {
+        opt.classList.remove('selected');
+        if (opt.dataset.color === selectedFenceColor) {
+            opt.classList.add('selected');
+        }
+    });
+    
+    // Update modal title
+    document.querySelector('#fenceModal .modal-header h3').textContent = '🖼️ Edit Fence';
+    
+    // Show modal
+    openModal('fenceModal');
 }
 
 function getElementsInsideFence(fence) {
