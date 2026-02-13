@@ -1102,16 +1102,11 @@ function drawConnections() {
         
         if (!sourceEl || !targetEl) return;
         
-        const sourceRect = sourceEl.getBoundingClientRect();
-        const targetRect = targetEl.getBoundingClientRect();
-        const canvasRect = canvas.getBoundingClientRect();
-        
-        // Calculate positions accounting for zoom
-        const currentZoom = zoomLevel || 1;
-        const x1 = (sourceRect.left - canvasRect.left) / currentZoom + sourceRect.width / 2 / currentZoom + canvas.parentElement.scrollLeft;
-        const y1 = (sourceRect.top - canvasRect.top) / currentZoom + sourceRect.height / 2 / currentZoom + canvas.parentElement.scrollTop;
-        const x2 = (targetRect.left - canvasRect.left) / currentZoom + targetRect.width / 2 / currentZoom + canvas.parentElement.scrollLeft;
-        const y2 = (targetRect.top - canvasRect.top) / currentZoom + targetRect.height / 2 / currentZoom + canvas.parentElement.scrollTop;
+        // Get positions directly from style (relative to canvas, unaffected by scroll)
+        const x1 = parseInt(sourceEl.style.left) + sourceEl.offsetWidth / 2;
+        const y1 = parseInt(sourceEl.style.top) + sourceEl.offsetHeight / 2;
+        const x2 = parseInt(targetEl.style.left) + targetEl.offsetWidth / 2;
+        const y2 = parseInt(targetEl.style.top) + targetEl.offsetHeight / 2;
         
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
         line.setAttribute('x1', x1);
