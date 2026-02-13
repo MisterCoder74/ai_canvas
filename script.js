@@ -718,8 +718,10 @@ function startDrag(e) {
     const canvas = document.getElementById('canvas');
     const canvasRect = canvas.getBoundingClientRect();
     
-    dragOffset.x = e.clientX - rect.left;
-    dragOffset.y = e.clientY - rect.top;
+    const currentZoom = zoomLevel || 1;
+    
+    dragOffset.x = (e.clientX - rect.left) / currentZoom;
+    dragOffset.y = (e.clientY - rect.top) / currentZoom;
     
     const elementType = getElementTypeFromElement(draggedElement);
     if (elementType) {
@@ -761,9 +763,10 @@ function doDrag(e) {
     const canvasRect = canvas.getBoundingClientRect();
     const scrollLeft = canvas.parentElement.scrollLeft;
     const scrollTop = canvas.parentElement.scrollTop;
+    const currentZoom = zoomLevel || 1;
     
-    let newX = e.clientX - canvasRect.left - dragOffset.x + scrollLeft;
-    let newY = e.clientY - canvasRect.top - dragOffset.y + scrollTop;
+    let newX = (e.clientX - canvasRect.left) / currentZoom - dragOffset.x + scrollLeft;
+    let newY = (e.clientY - canvasRect.top) / currentZoom - dragOffset.y + scrollTop;
     
     newX = Math.max(0, Math.min(newX, 3000 - draggedElement.offsetWidth));
     newY = Math.max(0, Math.min(newY, 2000 - draggedElement.offsetHeight));
@@ -2295,8 +2298,9 @@ function handleFenceClick(e) {
     const scrollLeft = canvas.parentElement.scrollLeft;
     const scrollTop = canvas.parentElement.scrollTop;
     
-    const x = e.clientX - rect.left + scrollLeft;
-    const y = e.clientY - rect.top + scrollTop;
+    const currentZoom = zoomLevel || 1;
+    const x = (e.clientX - rect.left) / currentZoom + scrollLeft;
+    const y = (e.clientY - rect.top) / currentZoom + scrollTop;
     
     if (!fenceStartPoint) {
         fenceStartPoint = { x, y };
@@ -2344,9 +2348,10 @@ function updateFencePreview(e) {
     const rect = canvas.getBoundingClientRect();
     const scrollLeft = canvas.parentElement.scrollLeft;
     const scrollTop = canvas.parentElement.scrollTop;
+    const currentZoom = zoomLevel || 1;
     
-    const x = e.clientX - rect.left + scrollLeft;
-    const y = e.clientY - rect.top + scrollTop;
+    const x = (e.clientX - rect.left) / currentZoom + scrollLeft;
+    const y = (e.clientY - rect.top) / currentZoom + scrollTop;
     
     const width = Math.abs(x - fenceStartPoint.x);
     const height = Math.abs(y - fenceStartPoint.y);
