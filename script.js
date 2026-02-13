@@ -708,20 +708,25 @@ function startDrag(e) {
         return;
     }
     
-    // Cancel any active modes
     cancelAllModes();
     
     draggedElement = e.currentTarget;
     draggedElement.classList.add('dragging');
     
-    const rect = draggedElement.getBoundingClientRect();
     const canvas = document.getElementById('canvas');
     const canvasRect = canvas.getBoundingClientRect();
-    
+    const scrollLeft = canvas.parentElement.scrollLeft;
+    const scrollTop = canvas.parentElement.scrollTop;
     const currentZoom = zoomLevel || 1;
     
-    dragOffset.x = (e.clientX - rect.left) / currentZoom;
-    dragOffset.y = (e.clientY - rect.top) / currentZoom;
+    const mouseLogicalX = (e.clientX - canvasRect.left) / currentZoom + scrollLeft;
+    const mouseLogicalY = (e.clientY - canvasRect.top) / currentZoom + scrollTop;
+    
+    const elLogicalX = parseInt(draggedElement.style.left) || 0;
+    const elLogicalY = parseInt(draggedElement.style.top) || 0;
+    
+    dragOffset.x = mouseLogicalX - elLogicalX;
+    dragOffset.y = mouseLogicalY - elLogicalY;
     
     const elementType = getElementTypeFromElement(draggedElement);
     if (elementType) {
@@ -765,14 +770,19 @@ function doDrag(e) {
     const scrollTop = canvas.parentElement.scrollTop;
     const currentZoom = zoomLevel || 1;
     
-    let newX = (e.clientX - canvasRect.left) / currentZoom - dragOffset.x + scrollLeft;
-    let newY = (e.clientY - canvasRect.top) / currentZoom - dragOffset.y + scrollTop;
+    const mouseLogicalX = (e.clientX - canvasRect.left) / currentZoom + scrollLeft;
+    const mouseLogicalY = (e.clientY - canvasRect.top) / currentZoom + scrollTop;
+    
+    let newX = mouseLogicalX - dragOffset.x;
+    let newY = mouseLogicalY - dragOffset.y;
     
     newX = Math.max(0, Math.min(newX, 3000 - draggedElement.offsetWidth));
     newY = Math.max(0, Math.min(newY, 2000 - draggedElement.offsetHeight));
     
     draggedElement.style.left = newX + 'px';
     draggedElement.style.top = newY + 'px';
+    
+    drawConnections();
 }
 
 function buildDragCommand() {
