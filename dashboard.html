@@ -544,6 +544,28 @@
         </div>
     </div>
 
+    <!-- Logout Confirmation Modal -->
+    <div class="modal" id="logoutConfirmModal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h3>🔒 Conferma Logout</h3>
+                <button class="modal-close" onclick="closeModal('logoutConfirmModal')">&times;</button>
+            </div>
+            <div class="modal-body" style="text-align: center; padding: 30px 20px;">
+                <p style="font-size: 16px; color: #495057; margin-bottom: 10px;">
+                    Sei sicuro di voler uscire?
+                </p>
+                <p style="font-size: 14px; color: #6c757d;">
+                    Dovrai effettuare nuovamente il login per accedere ai tuoi dati.
+                </p>
+            </div>
+            <div class="modal-footer" style="justify-content: center; gap: 15px;">
+                <button class="btn-secondary" onclick="closeModal('logoutConfirmModal')">Annulla</button>
+                <button class="btn-primary" onclick="confirmLogout()" style="background: #dc3545; border-color: #dc3545;">Logout</button>
+            </div>
+        </div>
+    </div>
+
     <script src="script.js?v=<?php echo($version); ?>"></script>
 </body>
 </html>

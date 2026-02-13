@@ -117,9 +117,12 @@ function displayUserInfo(user) {
 }
 
 function logout() {
-    if (confirm('Logout?')) {
-        window.location.href = 'logout.php';
-    }
+    openModal('logoutConfirmModal');
+}
+
+function confirmLogout() {
+    closeModal('logoutConfirmModal');
+    window.location.href = 'logout.php';
 }
 
 // ===== CONFIG MANAGEMENT =====
