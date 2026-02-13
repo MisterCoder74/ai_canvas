@@ -94,6 +94,17 @@ body {
     box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
 }
 
+.navbar-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.navbar-btn:disabled:hover {
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: none;
+}
+
 .logout-btn:hover {
     background: rgba(220, 53, 69, 0.2);
     border-color: rgba(220, 53, 69, 0.5);
