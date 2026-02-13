@@ -285,9 +285,9 @@ body {
 
 /* ===== ADD BUTTONS ===== */
 .add-btn {
-    position: absolute;
-    top: 100px;
-    left: 40px;
+    position: fixed;
+    top: 166px;
+    left: 330px;
     background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
     border: 2px solid #f9a825;
     color: #2d5016;
@@ -314,9 +314,9 @@ body {
 }
 
 .add-note-btn {
-    position: absolute;
-    top: 100px;
-    left: 164px;
+    position: fixed;
+    top: 166px;
+    left: 450px;
     background: linear-gradient(135deg, #fff59d 0%, #fff9c4 100%);
     border: 2px solid #f9a825;
     color: #6d4c41;
@@ -343,9 +343,9 @@ body {
 }
 
 .add-fence-btn {
-    position: absolute;
-    top: 100px;
-    left: 290px;
+    position: fixed;
+    top: 166px;
+	left: 576px;
     background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
     border: 2px solid #2196f3;
     color: #1565c0;
@@ -389,7 +389,7 @@ body {
     background: #ffffff;
     border: 2px solid #4a7c2c;
     border-radius: 12px;
-    padding: 20px;
+    padding: 10px;
     min-width: 280px;
     width: 320px;
     height: auto;
@@ -570,6 +570,7 @@ body {
     border-radius: 16px;
     width: 90%;
     max-width: 800px;
+    min-height: 560px;    
     max-height: 85vh;
     overflow: hidden;
     display: flex;
@@ -1350,8 +1351,8 @@ body {
 /* ===== EXPORT ALL BUTTON ===== */
 .canvas-export-all-btn {
     position: fixed;
-    bottom: 30px;
-    right: 360px;
+    bottom: 20px;
+    right: 120px;
     background: linear-gradient(135deg, #17a2b8 0%, #20c0d8 100%);
     border: none;
     color: #ffffff;
@@ -1632,11 +1633,11 @@ body {
     transition: all 0.2s ease;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
-
+ 
 .fence:hover .fence-edit {
     opacity: 1;
 }
-
+ 
 .fence-edit:hover {
     background: #4a7c2c;
     color: #ffffff;
