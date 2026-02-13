@@ -68,6 +68,14 @@ let zoomLevel = 1;
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2;
 
+// Undo/redo state
+const MAX_UNDO_STACK = 50;
+let undoStack = [];
+let redoStack = [];
+let isUndoingRedoing = false;
+let dragStartState = null;
+let resizeStartState = null;
+
 // ===== INITIALIZATION =====
 document.addEventListener('DOMContentLoaded', async function() {
     const authenticated = await checkAuth();
@@ -79,7 +87,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     await loadConfig();
     await loadCanvasState();
     await loadHistory();
+    await loadUndoState();
     initializeCanvas();
+    updateUndoRedoButtons();
 });
 
 // ===== AUTHENTICATION =====
@@ -176,6 +186,249 @@ async function saveCanvasState() {
     } catch (error) {
         console.error('Canvas save error:', error);
     }
+}
+
+// ===== UNDO/REDO MANAGEMENT =====
+async function loadUndoState() {
+    try {
+        const response = await fetch('user_data.php?type=undo', { cache: 'no-store' });
+        const data = await response.json();
+        if (data.success) {
+            undoStack = Array.isArray(data.data?.undoStack) ? data.data.undoStack : [];
+            redoStack = Array.isArray(data.data?.redoStack) ? data.data.redoStack : [];
+        }
+    } catch (error) {
+        console.error('Undo load error:', error);
+    }
+}
+
+async function saveUndoState() {
+    try {
+        await fetch('user_data.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'undo', data: { undoStack, redoStack } }),
+            cache: 'no-store'
+        });
+    } catch (error) {
+        console.error('Undo save error:', error);
+    }
+}
+
+function updateUndoRedoButtons() {
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
+    if (undoBtn) undoBtn.disabled = undoStack.length === 0;
+    if (redoBtn) redoBtn.disabled = redoStack.length === 0;
+}
+
+function pushUndoStack(command) {
+    if (isUndoingRedoing || !command) return;
+    undoStack.push(command);
+    if (undoStack.length > MAX_UNDO_STACK) {
+        undoStack.shift();
+    }
+    redoStack = [];
+    saveUndoState();
+    updateUndoRedoButtons();
+}
+
+function cloneData(data) {
+    return JSON.parse(JSON.stringify(data));
+}
+
+function ensureElementCollection(type) {
+    if (type === 'note' && !canvasState.notes) canvasState.notes = [];
+    if (type === 'fence' && !canvasState.fences) canvasState.fences = [];
+    if (type === 'magnet' && !canvasState.magnets) canvasState.magnets = [];
+    if (type === 'card' && !canvasState.cards) canvasState.cards = [];
+    return getElementCollection(type);
+}
+
+function getElementCollection(type) {
+    if (type === 'card') return canvasState.cards;
+    if (type === 'note') return canvasState.notes;
+    if (type === 'fence') return canvasState.fences;
+    if (type === 'magnet') return canvasState.magnets;
+    return null;
+}
+
+function getElementPosition(type, id) {
+    const collection = getElementCollection(type) || [];
+    const element = collection.find(item => item.id === id);
+    if (!element) return null;
+    return { x: element.x, y: element.y };
+}
+
+function setElementPosition(type, id, position) {
+    const collection = getElementCollection(type) || [];
+    const element = collection.find(item => item.id === id);
+    if (!element || !position) return;
+    element.x = position.x;
+    element.y = position.y;
+}
+
+function setCardSize(id, size) {
+    const card = canvasState.cards.find(c => c.id === id);
+    if (!card || !size) return;
+    card.width = size.width;
+    card.height = size.height;
+}
+
+function updateElementFields(type, id, values) {
+    const collection = getElementCollection(type) || [];
+    const element = collection.find(item => item.id === id);
+    if (!element || !values) return;
+    Object.keys(values).forEach(key => {
+        element[key] = values[key];
+    });
+}
+
+function addElementToState(type, data) {
+    const collection = ensureElementCollection(type) || [];
+    const existingIndex = collection.findIndex(item => item.id === data.id);
+    if (existingIndex !== -1) {
+        collection.splice(existingIndex, 1);
+    }
+    collection.push(cloneData(data));
+}
+
+function removeElementFromState(type, id) {
+    const collection = ensureElementCollection(type) || [];
+    const index = collection.findIndex(item => item.id === id);
+    if (index === -1) return null;
+    const removed = collection.splice(index, 1)[0];
+    return removed ? cloneData(removed) : null;
+}
+
+function addConnectionToState(connection) {
+    if (!canvasState.connections) canvasState.connections = [];
+    const exists = canvasState.connections.find(conn => conn.id === connection.id ||
+        ((conn.source === connection.source && conn.target === connection.target) ||
+        (conn.source === connection.target && conn.target === connection.source)));
+    if (!exists) {
+        canvasState.connections.push(cloneData(connection));
+    }
+}
+
+function removeConnectionById(connectionId) {
+    if (!canvasState.connections) canvasState.connections = [];
+    canvasState.connections = canvasState.connections.filter(conn => conn.id !== connectionId);
+}
+
+function removeConnectionsForElement(elementId) {
+    if (!canvasState.connections) canvasState.connections = [];
+    const removed = canvasState.connections.filter(conn => conn.source === elementId || conn.target === elementId);
+    canvasState.connections = canvasState.connections.filter(conn => conn.source !== elementId && conn.target !== elementId);
+    return removed.map(conn => cloneData(conn));
+}
+
+function applyCommand(command, direction) {
+    const isUndo = direction === 'undo';
+    if (!command) return;
+
+    switch (command.type) {
+        case 'move': {
+            const position = isUndo ? command.before : command.after;
+            setElementPosition(command.elementType, command.id, position);
+            break;
+        }
+        case 'resize': {
+            const size = isUndo ? command.before : command.after;
+            setCardSize(command.id, size);
+            break;
+        }
+        case 'update': {
+            const values = isUndo ? command.before : command.after;
+            updateElementFields(command.elementType, command.id, values);
+            break;
+        }
+        case 'add': {
+            if (isUndo) {
+                removeElementFromState(command.elementType, command.data.id);
+                if (command.connections) {
+                    command.connections.forEach(conn => removeConnectionById(conn.id));
+                }
+            } else {
+                addElementToState(command.elementType, command.data);
+                if (command.connections) {
+                    command.connections.forEach(conn => addConnectionToState(conn));
+                }
+            }
+            break;
+        }
+        case 'delete': {
+            if (isUndo) {
+                addElementToState(command.elementType, command.data);
+                if (command.connections) {
+                    command.connections.forEach(conn => addConnectionToState(conn));
+                }
+            } else {
+                removeElementFromState(command.elementType, command.data.id);
+                if (command.connections) {
+                    command.connections.forEach(conn => removeConnectionById(conn.id));
+                }
+            }
+            break;
+        }
+        case 'connection': {
+            if (isUndo) {
+                removeConnectionById(command.data.id);
+            } else {
+                addConnectionToState(command.data);
+            }
+            break;
+        }
+        case 'fence-move': {
+            const fencePosition = isUndo ? command.before : command.after;
+            setElementPosition('fence', command.fenceId, fencePosition);
+            command.elements.forEach(item => {
+                const position = isUndo ? item.before : item.after;
+                setElementPosition(item.elementType, item.id, position);
+            });
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+function undo() {
+    if (undoStack.length === 0) {
+        showToast('info', 'Undo', 'Nothing to undo.');
+        return;
+    }
+
+    const command = undoStack.pop();
+    isUndoingRedoing = true;
+    applyCommand(command, 'undo');
+    isUndoingRedoing = false;
+    redoStack.push(command);
+
+    saveCanvasState();
+    renderCanvas();
+    saveUndoState();
+    updateUndoRedoButtons();
+    showToast('info', 'Undo', 'Action reverted.');
+}
+
+function redo() {
+    if (redoStack.length === 0) {
+        showToast('info', 'Redo', 'Nothing to redo.');
+        return;
+    }
+
+    const command = redoStack.pop();
+    isUndoingRedoing = true;
+    applyCommand(command, 'redo');
+    isUndoingRedoing = false;
+    undoStack.push(command);
+
+    saveCanvasState();
+    renderCanvas();
+    saveUndoState();
+    updateUndoRedoButtons();
+    showToast('info', 'Redo', 'Action restored.');
 }
 
 // ===== HISTORY MANAGEMENT =====
@@ -433,6 +686,14 @@ function createCanvasCard(cardData) {
     return card;
 }
 
+function getElementTypeFromElement(element) {
+    if (element.classList.contains('canvas-card')) return 'card';
+    if (element.classList.contains('sticky-note')) return 'note';
+    if (element.classList.contains('fence')) return 'fence';
+    if (element.classList.contains('magnet-card')) return 'magnet';
+    return null;
+}
+
 // ===== DRAG & DROP =====
 function startDrag(e) {
     // Don't drag if clicking on buttons or resize handle
@@ -459,6 +720,23 @@ function startDrag(e) {
     
     dragOffset.x = e.clientX - rect.left;
     dragOffset.y = e.clientY - rect.top;
+    
+    const elementType = getElementTypeFromElement(draggedElement);
+    if (elementType) {
+        const elementId = parseInt(draggedElement.dataset.id);
+        const beforePosition = getElementPosition(elementType, elementId);
+        dragStartState = beforePosition ? {
+            elementType,
+            id: elementId,
+            before: { ...beforePosition }
+        } : null;
+        if (elementType === 'fence') {
+            const fence = canvasState.fences.find(f => f.id === elementId);
+            if (fence && dragStartState) {
+                dragStartState.affectedElements = getElementsInsideFence(fence);
+            }
+        }
+    }
     
     // Store original position for fence content movement
     if (draggedElement.classList.contains('fence')) {
@@ -492,6 +770,44 @@ function doDrag(e) {
     
     draggedElement.style.left = newX + 'px';
     draggedElement.style.top = newY + 'px';
+}
+
+function buildDragCommand() {
+    if (!dragStartState) return null;
+
+    const { elementType, id, before, affectedElements } = dragStartState;
+    const after = getElementPosition(elementType, id);
+    if (!before || !after) return null;
+
+    const moved = before.x !== after.x || before.y !== after.y;
+    if (!moved) return null;
+
+    if (elementType === 'fence') {
+        const elements = (affectedElements || []).map(item => {
+            const afterPosition = getElementPosition(item.elementType, item.id) || item.before;
+            return {
+                elementType: item.elementType,
+                id: item.id,
+                before: { ...item.before },
+                after: { ...afterPosition }
+            };
+        });
+        return {
+            type: 'fence-move',
+            fenceId: id,
+            before: { ...before },
+            after: { ...after },
+            elements
+        };
+    }
+
+    return {
+        type: 'move',
+        elementType,
+        id,
+        before: { ...before },
+        after: { ...after }
+    };
 }
 
 function stopDrag(e) {
@@ -538,6 +854,12 @@ function stopDrag(e) {
         }
     }
     
+    const moveCommand = buildDragCommand();
+    if (moveCommand) {
+        pushUndoStack(moveCommand);
+    }
+    dragStartState = null;
+    
     saveCanvasState();
     renderCanvas();
     
@@ -559,6 +881,10 @@ function startResize(e, cardId) {
     resizeStartSize.height = card.offsetHeight;
     resizeStartPos.x = e.clientX;
     resizeStartPos.y = e.clientY;
+    resizeStartState = {
+        id: cardId,
+        before: { width: resizeStartSize.width, height: resizeStartSize.height }
+    };
     
     document.addEventListener('mousemove', doResize);
     document.addEventListener('mouseup', stopResize);
@@ -589,10 +915,26 @@ function stopResize(e) {
     const card = canvasState.cards.find(c => c.id === cardId);
     
     if (card) {
-        card.width = resizingCard.offsetWidth;
-        card.height = resizingCard.offsetHeight;
+        const afterSize = { width: resizingCard.offsetWidth, height: resizingCard.offsetHeight };
+        const beforeSize = resizeStartState ? resizeStartState.before : {
+            width: card.width || afterSize.width,
+            height: card.height || afterSize.height
+        };
+        card.width = afterSize.width;
+        card.height = afterSize.height;
+
+        if (!isUndoingRedoing && resizeStartState &&
+            (beforeSize.width !== afterSize.width || beforeSize.height !== afterSize.height)) {
+            pushUndoStack({
+                type: 'resize',
+                id: cardId,
+                before: { ...beforeSize },
+                after: { ...afterSize }
+            });
+        }
         saveCanvasState();
     }
+    resizeStartState = null;
     
     document.removeEventListener('mousemove', doResize);
     document.removeEventListener('mouseup', stopResize);
@@ -619,11 +961,26 @@ function addCardToCanvas(tool, request, response, imageUrl = null) {
     canvasState.cards.push(cardData);
     saveCanvasState();
     createCanvasCard(cardData);
+    pushUndoStack({
+        type: 'add',
+        elementType: 'card',
+        data: cloneData(cardData)
+    });
 }
 
 function removeCanvasCard(id) {
     if (!confirm('Remove this card?')) return;
+    const card = canvasState.cards.find(c => c.id === id);
+    if (!card) return;
+
+    const removedConnections = removeConnectionsForElement(id);
     canvasState.cards = canvasState.cards.filter(c => c.id !== id);
+    pushUndoStack({
+        type: 'delete',
+        elementType: 'card',
+        data: cloneData(card),
+        connections: removedConnections
+    });
     saveCanvasState();
     renderCanvas();
     showToast('success', 'Card Removed', 'Card deleted from canvas.');
@@ -648,7 +1005,17 @@ function saveCardNote() {
     const card = canvasState.cards.find(c => c.id === currentNoteCardId);
     
     if (card) {
+        const beforeNote = card.note || '';
         card.note = note;
+        if (!isUndoingRedoing && beforeNote !== note) {
+            pushUndoStack({
+                type: 'update',
+                elementType: 'card',
+                id: card.id,
+                before: { note: beforeNote },
+                after: { note: note }
+            });
+        }
         saveCanvasState();
         renderCanvas();
         showToast('success', note ? 'Note Saved' : 'Note Removed', 'Card note updated.');
@@ -698,14 +1065,19 @@ function createConnection(sourceId, targetId) {
         return;
     }
     
-    canvasState.connections.push({
+    const connectionData = {
         id: Date.now(),
         source: sourceId,
         target: targetId
-    });
+    };
+    canvasState.connections.push(connectionData);
     
     saveCanvasState();
     drawConnections();
+    pushUndoStack({
+        type: 'connection',
+        data: cloneData(connectionData)
+    });
     showToast('success', 'Cards Connected', 'Cards linked successfully.');
 }
 
@@ -1806,6 +2178,11 @@ function createStickyNote() {
     canvasState.notes.push(noteData);
     saveCanvasState();
     createStickyNoteElement(noteData);
+    pushUndoStack({
+        type: 'add',
+        elementType: 'note',
+        data: cloneData(noteData)
+    });
     
     closeModal('stickyNoteModal');
     showToast('success', 'Note Created', 'Sticky note added to canvas!');
@@ -1852,8 +2229,20 @@ function editStickyNote(id) {
     
     const newText = prompt('Edit note:', note.text);
     if (newText !== null && newText.trim() !== '') {
-        note.text = newText.trim();
-        note.timestamp = new Date().toISOString();
+        const beforeData = { text: note.text, timestamp: note.timestamp };
+        const updatedText = newText.trim();
+        const updatedTimestamp = new Date().toISOString();
+        note.text = updatedText;
+        note.timestamp = updatedTimestamp;
+        if (!isUndoingRedoing && (beforeData.text !== updatedText || beforeData.timestamp !== updatedTimestamp)) {
+            pushUndoStack({
+                type: 'update',
+                elementType: 'note',
+                id: note.id,
+                before: beforeData,
+                after: { text: updatedText, timestamp: updatedTimestamp }
+            });
+        }
         saveCanvasState();
         renderCanvas();
         showToast('success', 'Note Updated', 'Note updated successfully.');
@@ -1862,7 +2251,14 @@ function editStickyNote(id) {
 
 function removeStickyNote(id) {
     if (!confirm('Remove this sticky note?')) return;
+    const note = canvasState.notes.find(n => n.id === id);
+    if (!note) return;
     canvasState.notes = canvasState.notes.filter(n => n.id !== id);
+    pushUndoStack({
+        type: 'delete',
+        elementType: 'note',
+        data: cloneData(note)
+    });
     saveCanvasState();
     renderCanvas();
     showToast('success', 'Note Removed', 'Sticky note deleted.');
@@ -1996,6 +2392,11 @@ function confirmFence() {
     canvasState.fences.push(fenceData);
     saveCanvasState();
     createFenceElement(fenceData);
+    pushUndoStack({
+        type: 'add',
+        elementType: 'fence',
+        data: cloneData(fenceData)
+    });
     
     closeModal('fenceModal');
     tempFenceCoords = null;
@@ -2044,10 +2445,73 @@ function createFenceElement(fenceData) {
 
 function removeFence(id) {
     if (!confirm('Remove this fence?')) return;
+    const fence = canvasState.fences.find(f => f.id === id);
+    if (!fence) return;
     canvasState.fences = canvasState.fences.filter(f => f.id !== id);
+    pushUndoStack({
+        type: 'delete',
+        elementType: 'fence',
+        data: cloneData(fence)
+    });
     saveCanvasState();
     renderCanvas();
     showToast('success', 'Fence Removed', 'Visual group deleted.');
+}
+
+function getElementsInsideFence(fence) {
+    const elements = [];
+    const fenceLeft = fence.x;
+    const fenceTop = fence.y;
+    const fenceRight = fence.x + fence.width;
+    const fenceBottom = fence.y + fence.height;
+
+    canvasState.cards.forEach(card => {
+        const cardCenterX = card.x + (card.width || 320) / 2;
+        const cardCenterY = card.y + (card.height || 250) / 2;
+
+        if (cardCenterX >= fenceLeft && cardCenterX <= fenceRight &&
+            cardCenterY >= fenceTop && cardCenterY <= fenceBottom) {
+            elements.push({
+                elementType: 'card',
+                id: card.id,
+                before: { x: card.x, y: card.y }
+            });
+        }
+    });
+
+    if (canvasState.notes) {
+        canvasState.notes.forEach(note => {
+            const noteCenterX = note.x + 100;
+            const noteCenterY = note.y + 75;
+
+            if (noteCenterX >= fenceLeft && noteCenterX <= fenceRight &&
+                noteCenterY >= fenceTop && noteCenterY <= fenceBottom) {
+                elements.push({
+                    elementType: 'note',
+                    id: note.id,
+                    before: { x: note.x, y: note.y }
+                });
+            }
+        });
+    }
+
+    if (canvasState.magnets) {
+        canvasState.magnets.forEach(magnet => {
+            const magnetCenterX = magnet.x + 75;
+            const magnetCenterY = magnet.y + 75;
+
+            if (magnetCenterX >= fenceLeft && magnetCenterX <= fenceRight &&
+                magnetCenterY >= fenceTop && magnetCenterY <= fenceBottom) {
+                elements.push({
+                    elementType: 'magnet',
+                    id: magnet.id,
+                    before: { x: magnet.x, y: magnet.y }
+                });
+            }
+        });
+    }
+
+    return elements;
 }
 
 function moveElementsInsideFence(fence, deltaX, deltaY) {
@@ -2131,6 +2595,11 @@ function createMagnet() {
     canvasState.magnets.push(magnetData);
     saveCanvasState();
     createMagnetElement(magnetData);
+    pushUndoStack({
+        type: 'add',
+        elementType: 'magnet',
+        data: cloneData(magnetData)
+    });
     
     showToast('success', 'Magnet Created', 'Mini image card added to canvas!');
 }
@@ -2197,13 +2666,17 @@ function toggleMagnetLink(magnetId) {
 
 function removeMagnet(id) {
     if (!confirm('Remove this magnet?')) return;
-    
+    const magnet = canvasState.magnets.find(m => m.id === id);
+    if (!magnet) return;
+
+    const removedConnections = removeConnectionsForElement(id);
     canvasState.magnets = canvasState.magnets.filter(m => m.id !== id);
-    
-    // Remove connections involving this magnet
-    canvasState.connections = canvasState.connections.filter(
-        conn => conn.source !== id && conn.target !== id
-    );
+    pushUndoStack({
+        type: 'delete',
+        elementType: 'magnet',
+        data: cloneData(magnet),
+        connections: removedConnections
+    });
     
     saveCanvasState();
     renderCanvas();

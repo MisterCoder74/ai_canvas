@@ -8,11 +8,11 @@
  * === RICHIESTE ===
  * 
  * GET: Carica dati
- * ?type=config|canvas|history
+ * ?type=config|canvas|history|undo
  * 
  * POST: Salva dati
  * {
- *     "type": "config|canvas|history",
+ *     "type": "config|canvas|history|undo",
  *     "data": {...}
  * }
  * 
@@ -48,13 +48,14 @@ if (!file_exists($userFolder)) {
     file_put_contents($userFolder . '/config.json', json_encode(['apiKey' => ''], JSON_PRETTY_PRINT));
     file_put_contents($userFolder . '/canvas.json', json_encode(['cards' => [], 'connections' => []], JSON_PRETTY_PRINT));
     file_put_contents($userFolder . '/history.json', json_encode([], JSON_PRETTY_PRINT));
+    file_put_contents($userFolder . '/undo.json', json_encode(['undoStack' => [], 'redoStack' => []], JSON_PRETTY_PRINT));
 }
 
 // === GET REQUEST: Carica dati ===
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $type = isset($_GET['type']) ? $_GET['type'] : '';
     
-    $validTypes = ['config', 'canvas', 'history'];
+    $validTypes = ['config', 'canvas', 'history', 'undo'];
     if (!in_array($type, $validTypes)) {
         echo json_encode([
             'success' => false,
@@ -72,6 +73,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $defaultData = ['apiKey' => ''];
         } elseif ($type === 'canvas') {
             $defaultData = ['cards' => [], 'connections' => []];
+        } elseif ($type === 'undo') {
+            $defaultData = ['undoStack' => [], 'redoStack' => []];
         }
         file_put_contents($fileName, json_encode($defaultData, JSON_PRETTY_PRINT));
     }
@@ -101,7 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $type = $requestData['type'];
     $data = $requestData['data'];
     
-    $validTypes = ['config', 'canvas', 'history'];
+    $validTypes = ['config', 'canvas', 'history', 'undo'];
     if (!in_array($type, $validTypes)) {
         echo json_encode([
             'success' => false,
