@@ -2476,63 +2476,10 @@ function createFenceElement(fenceData) {
     label.style.pointerEvents = 'auto';
     label.style.cursor = 'text';
     
-    // Make label editable on click
-    label.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent drag start
-        if (!label.isContentEditable) {
-            label.contentEditable = 'true';
-            label.focus();
-            // Select all text
-            const range = document.createRange();
-            range.selectNodeContents(label);
-            const sel = window.getSelection();
-            sel.removeAllRanges();
-            sel.addRange(range);
-        }
-    });
-    
-    // Save on blur (click outside)
-    label.addEventListener('blur', () => {
-        if (label.isContentEditable) {
-            label.contentEditable = 'false';
-            const newLabel = label.textContent.trim();
-            
-            // Update fence data
-            const fence = canvasState.fences.find(f => f.id === fenceData.id);
-            if (fence) {
-                fence.label = newLabel;
-                saveCanvasState();
-                showToast('success', 'Label Updated', 'Fence label saved.');
-            }
-        }
-    });
-    
-    // Save on Enter key
-    label.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            label.blur(); // Triggers save via blur event
-        }
-        if (e.key === 'Escape') {
-            // Cancel edit and restore original
-            label.textContent = fenceData.label || '';
-            label.contentEditable = 'false';
-        }
-    });
     
     fence.appendChild(label);
     
-    // Add double-click on fence for color editing
-    fence.addEventListener('dblclick', (e) => {
-        // Don't trigger if clicking label (already editable) or close button
-        if (e.target.classList.contains('fence-label') || 
-            e.target.classList.contains('fence-close')) {
-            return;
-        }
-        
-        // Open fence modal for color editing
-        editFence(fenceData.id);
-    });
+   
 
     const closeBtn = document.createElement('button');
     closeBtn.className = 'fence-close';
