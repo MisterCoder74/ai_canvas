@@ -1456,7 +1456,14 @@ function cancelAllModes() {
     
     // Cancel fence drawing
     if (isDrawingFence) {
+        // If we were drawing a fence, clean up the listener
         const canvas = document.getElementById('canvas');
+        canvas.removeEventListener('mousemove', updateFencePreview);
+        canvas.removeEventListener('click', handleFenceClick);
+        if (fencePreviewElement) {
+            fencePreviewElement.remove();
+            fencePreviewElement = null;
+        }
         canvas.classList.remove('drawing-mode');
         canvas.removeEventListener('click', handleFenceClick);
         canvas.removeEventListener('mousemove', updateFencePreview);
@@ -2297,7 +2304,7 @@ function startDrawingFence() {
     canvas.addEventListener('click', handleFenceClick);
 }
 
-function handleFenceClick(e) {
+/*function handleFenceClick(e) {
     if (!isDrawingFence) return;
     
     // Ignore clicks on existing elements
@@ -2358,7 +2365,97 @@ function handleFenceClick(e) {
         document.querySelector('#fenceModal .color-option[data-color="#4a7c2c"]').classList.add('selected');
         openModal('fenceModal');
     }
+}*/
+
+function handleFenceClick(e) {
+    if (!isDrawingFence) return;
+    
+    // Ignore clicks on existing elements
+    if (e.target.classList.contains('canvas-card') ||
+        e.target.classList.contains('sticky-note') ||
+        e.target.classList.contains('fence') ||
+        e.target.classList.contains('magnet-card') ||
+        e.target.closest('.canvas-card') ||
+        e.target.closest('.sticky-note') ||
+        e.target.closest('.fence') ||
+        e.target.closest('.magnet-card')) {
+        return;
+    }
+    
+    const canvas = document.getElementById('canvas');
+    const rect = canvas.getBoundingClientRect();
+    const scrollLeft = canvas.parentElement.scrollLeft;
+    const scrollTop = canvas.parentElement.scrollTop;
+    const currentZoom = zoomLevel || 1;
+    
+    // Zoom-aware coordinates - CRITICAL FIX
+    const x = (e.clientX - rect.left) / currentZoom + scrollLeft;
+    const y = (e.clientY - rect.top) / currentZoom + scrollTop;
+    
+    if (!fenceStartPoint) {
+        // First click - start point
+        fenceStartPoint = { x, y };
+        
+        fencePreviewElement = document.createElement('div');
+        fencePreviewElement.className = 'fence-preview';
+        fencePreviewElement.style.left = x + 'px';
+        fencePreviewElement.style.top = y + 'px';
+        fencePreviewElement.style.width = '0px';
+        fencePreviewElement.style.height = '0px';
+        canvas.appendChild(fencePreviewElement);
+        
+        canvas.addEventListener('mousemove', updateFencePreview);
+    } else {
+        // Second click - end point
+        const width = Math.abs(x - fenceStartPoint.x);
+        const height = Math.abs(y - fenceStartPoint.y);
+        const left = Math.min(x, fenceStartPoint.x);
+        const top = Math.min(y, fenceStartPoint.y);
+        
+        tempFenceCoords = { x: left, y: top, width, height };
+        
+        canvas.removeEventListener('mousemove', updateFencePreview);
+        canvas.removeEventListener('click', handleFenceClick);
+        
+        if (fencePreviewElement) {
+            fencePreviewElement.remove();
+            fencePreviewElement = null;
+        }
+        
+        canvas.classList.remove('drawing-mode');
+        isDrawingFence = false;
+        
+        // Reset modal and open it
+        selectedFenceColor = '#4a7c2c';
+        document.getElementById('fenceLabel').value = '';
+        document.querySelectorAll('#fenceModal .color-option').forEach(opt => opt.classList.remove('selected'));
+        document.querySelector('#fenceModal .color-option[data-color="#4a7c2c"]').classList.add('selected');
+        openModal('fenceModal');
+    }
 }
+
+/*function updateFencePreview(e) {
+    if (!fencePreviewElement || !fenceStartPoint) return;
+    
+    const canvas = document.getElementById('canvas');
+    const rect = canvas.getBoundingClientRect();
+    const scrollLeft = canvas.parentElement.scrollLeft;
+    const scrollTop = canvas.parentElement.scrollTop;
+    const currentZoom = zoomLevel || 1;
+    
+    const x = (e.clientX - rect.left) / currentZoom + scrollLeft;
+    const y = (e.clientY - rect.top) / currentZoom + scrollTop;
+    
+    const width = Math.abs(x - fenceStartPoint.x);
+    const height = Math.abs(y - fenceStartPoint.y);
+    const left = Math.min(x, fenceStartPoint.x);
+    const top = Math.min(y, fenceStartPoint.y);
+    
+    fencePreviewElement.style.left = left + 'px';
+    fencePreviewElement.style.top = top + 'px';
+    fencePreviewElement.style.width = width + 'px';
+    fencePreviewElement.style.height = height + 'px';
+}*/
 
 function updateFencePreview(e) {
     if (!fencePreviewElement || !fenceStartPoint) return;
@@ -2369,6 +2466,7 @@ function updateFencePreview(e) {
     const scrollTop = canvas.parentElement.scrollTop;
     const currentZoom = zoomLevel || 1;
     
+    // Zoom-aware coordinates - CRITICAL FIX
     const x = (e.clientX - rect.left) / currentZoom + scrollLeft;
     const y = (e.clientY - rect.top) / currentZoom + scrollTop;
     
@@ -2476,10 +2574,64 @@ function createFenceElement(fenceData) {
     label.style.pointerEvents = 'auto';
     label.style.cursor = 'text';
     
+    // Make label editable on click
+    /*    
+    label.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent drag start
+        if (!label.isContentEditable) {
+            label.contentEditable = 'true';
+            label.focus();
+            // Select all text
+            const range = document.createRange();
+            range.selectNodeContents(label);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+    });
     
+    // Save on blur (click outside)
+    label.addEventListener('blur', () => {
+        if (label.isContentEditable) {
+            label.contentEditable = 'false';
+            const newLabel = label.textContent.trim();
+            
+            // Update fence data
+            const fence = canvasState.fences.find(f => f.id === fenceData.id);
+            if (fence) {
+                fence.label = newLabel;
+                saveCanvasState();
+                showToast('success', 'Label Updated', 'Fence label saved.');
+            }
+        }
+    });
+    
+    // Save on Enter key
+    label.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            label.blur(); // Triggers save via blur event
+        }
+        if (e.key === 'Escape') {
+            // Cancel edit and restore original
+            label.textContent = fenceData.label || '';
+            label.contentEditable = 'false';
+        }
+    });
+    */
     fence.appendChild(label);
     
-   
+    /* Add double-click on fence for color editing
+    fence.addEventListener('dblclick', (e) => {
+        // Don't trigger if clicking label (already editable) or close button
+        if (e.target.classList.contains('fence-label') || 
+            e.target.classList.contains('fence-close')) {
+            return;
+        }
+        
+        // Open fence modal for color editing
+        editFence(fenceData.id);
+    }); */
 
     const closeBtn = document.createElement('button');
     closeBtn.className = 'fence-close';
