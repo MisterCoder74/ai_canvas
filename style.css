@@ -1580,6 +1580,14 @@ body {
     font-weight: 700;
     color: inherit;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    pointer-events: auto;
+    cursor: pointer;
+    transition: background 0.2s, box-shadow 0.2s;
+}
+
+.fence-label:hover {
+    background: rgba(255, 255, 255, 1);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
 }
 
 .fence-close {
@@ -1613,38 +1621,7 @@ body {
     color: #ffffff;
 }
 
-.fence-edit {
-    position: absolute;
-    top: 8px;
-    right: 36px;
-    background: rgba(255, 255, 255, 0.9);
-    border: none;
-    color: #4a7c2c;
-    cursor: pointer;
-    font-size: 14px;
-    padding: 4px;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    opacity: 0;
-    transition: all 0.2s ease;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    z-index: 5;
-    pointer-events: auto;
-}
- 
-.fence:hover .fence-edit {
-    opacity: 1;
-}
- 
-.fence-edit:hover {
-    background: #4a7c2c;
-    color: #ffffff;
-    transform: scale(1.1);
-}
+/* Removed .fence-edit styles - no longer using edit button */
 
 /* Fence drawing preview */
 .fence-preview {

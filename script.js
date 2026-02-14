@@ -2473,20 +2473,20 @@ function createFenceElement(fenceData) {
         const label = document.createElement('div');
         label.className = 'fence-label';
         label.textContent = fenceData.label;
-        label.style.pointerEvents = 'none';
+        label.style.pointerEvents = 'auto';
+        
+        label.addEventListener('click', (e) => {
+            e.stopPropagation();
+            editFence(fenceData.id);
+        });
+        
         fence.appendChild(label);
     }
     
-    const editBtn = document.createElement('button');
-    editBtn.className = 'fence-edit';
-    editBtn.innerHTML = '✏️';
-    editBtn.title = 'Edit fence';
-    editBtn.onclick = (e) => {
-        e.stopPropagation();
-        e.preventDefault();
+    fence.addEventListener('dblclick', (e) => {
+        if (e.target.classList.contains('fence-close')) return;
         editFence(fenceData.id);
-    };
-    fence.appendChild(editBtn);
+    });
 
     const closeBtn = document.createElement('button');
     closeBtn.className = 'fence-close';
